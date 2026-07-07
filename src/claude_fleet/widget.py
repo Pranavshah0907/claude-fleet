@@ -7,10 +7,11 @@ Frameless, draggable by the header, remembers its corner. Right-click for a menu
 from __future__ import annotations
 
 import sys
+import threading
 import time
 import tkinter as tk
 
-from . import common
+from . import common, remote
 
 POLL_MS = 500
 STALE_SECS = 15 * 60      # dim to gray after this with no update
@@ -21,6 +22,7 @@ HEADER_BG = "#111113"
 FG = "#e6e6e6"
 DIM = "#8a8a8a"
 ACCENT = "#4c8bf5"
+HOST_FG = "#6b7bb0"        # dim blue tag for sessions on other machines
 ROW_H = 26
 HEADER_H = 24
 WIDTH = 300
@@ -51,7 +53,19 @@ class FleetWidget:
         self._drag = {"x": 0, "y": 0}
 
         self._restore_position()
+        self._start_sync()
         self.refresh()
+
+    def _start_sync(self) -> None:
+        """If a room is configured, run the cross-machine sync in a daemon thread."""
+        self._sync_stop = None
+        try:
+            if remote.is_configured():
+                self._sync_stop = threading.Event()
+                threading.Thread(target=remote.run_sync, args=(self._sync_stop,),
+                                 daemon=True).start()
+        except Exception:
+            pass
 
     # --- layout ---------------------------------------------------------------
     def _build_header(self) -> None:
@@ -82,35 +96,40 @@ class FleetWidget:
         cx, cy = 9, ROW_H // 2
         oval = canvas.create_oval(cx - LED_R, cy - LED_R, cx + LED_R, cy + LED_R,
                                   fill=common.COLORS[common.IDLE], outline="")
+        host_lbl = tk.Label(fr, text="", fg=HOST_FG, bg=BG, font=("Segoe UI", 7))
+        host_lbl.pack(side="right", padx=(0, 2))
         name_lbl = tk.Label(fr, text="", fg=FG, bg=BG, font=("Segoe UI", 9), anchor="w")
         name_lbl.pack(side="left", fill="x", expand=True, padx=(12, 0))
-        return {"frame": fr, "canvas": canvas, "oval": oval, "name": name_lbl}
+        return {"frame": fr, "canvas": canvas, "oval": oval, "name": name_lbl, "host": host_lbl}
 
     # --- refresh loop ---------------------------------------------------------
     def refresh(self) -> None:
         now = time.time()
-        sessions = common.read_all_sessions()
+        sessions = common.read_all_sessions() + common.read_remote_sessions()
         visible = [s for s in sessions if now - s.get("updated_at", 0) < HIDE_SECS]
         visible.sort(key=lambda s: (PRIORITY.get(s.get("status"), 9),
+                                    str(s.get("host") or ""),
                                     str(s.get("name", "")).lower()))
 
         seen = set()
         for s in visible:
-            sid = s.get("session_id")
-            seen.add(sid)
+            host = s.get("host") or ""       # remote sessions carry their machine
+            key = f"{host}/{s.get('session_id')}"
+            seen.add(key)
             status = s.get("status", common.IDLE)
             stale = (now - s.get("updated_at", 0)) > STALE_SECS
             color = common.STALE_COLOR if stale else common.COLORS.get(
                 status, common.COLORS[common.IDLE])
-            if sid not in self.rows:
-                self.rows[sid] = self._make_row()
-            row = self.rows[sid]
+            if key not in self.rows:
+                self.rows[key] = self._make_row()
+            row = self.rows[key]
             row["name"].config(text=self._truncate(str(s.get("name", "?")), NAME_CHARS))
+            row["host"].config(text=host)
             row["canvas"].itemconfig(row["oval"], fill=color)
 
-        for sid in list(self.rows):
-            if sid not in seen:
-                self.rows.pop(sid)["frame"].destroy()
+        for key in list(self.rows):
+            if key not in seen:
+                self.rows.pop(key)["frame"].destroy()
 
         self._update_empty(len(visible) == 0)
         self._resize(len(visible))

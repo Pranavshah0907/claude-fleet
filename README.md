@@ -55,13 +55,51 @@ claude-fleet-install --uninstall
 uv tool uninstall claude-fleet
 ```
 
-## Notes / current limitations (v1)
+## Link laptops together (cross-machine)
+
+Show sessions from *other* laptops in the same widget — AnyDesk-style, with an **ID + PASS**:
+
+- **ID** = a pairing code embedding the relay location (safe-ish to share).
+- **PASS** = a passphrase that never leaves your machines and **end-to-end-encrypts**
+  every record. The relay/provider only ever sees a random room id, opaque keys, and
+  ciphertext — never your project names or hostnames.
+
+The relay is an [Upstash Redis](https://upstash.com) database (free tier), reached over
+plain HTTPS (firewall-friendly). Sessions auto-expire via TTL, so dead ones vanish on their own.
+
+**One-time setup (on your first machine):**
+
+1. Create a free Upstash Redis DB → copy its **REST URL** and **REST TOKEN**
+   (Upstash console → your DB → "REST API").
+2. Create the room and link this machine:
+   ```bash
+   claude-fleet init-room            # prompts for the URL + token; prints ID + PASS
+   ```
+3. On **every other laptop** (after `uv tool install` + `claude-fleet-install`):
+   ```bash
+   claude-fleet link --code <ID> --pass <PASS>
+   ```
+
+**Then, on each machine that should participate**, run one of:
+- `claude-fleet` — the widget (also syncs in a background thread), or
+- `claude-fleet agent` — headless sync only (for a box you don't watch; good for autostart).
+
+Every machine running the widget shows the **whole fleet**; remote rows are tagged with a
+dim machine name. `claude-fleet status` shows your link + connectivity; `claude-fleet unlink`
+reverts to local-only. Local sessions stay instant (file-based); remote ones lag ~1–3 s.
+
+> Live status needs both ends online: a remote session shows only while that laptop's
+> session is active *and* its widget/agent is running and reachable.
+
+## Notes / current limitations
 
 - The installer edits your **global** `~/.claude/settings.json` (backed up to
   `settings.fleet-backup-<timestamp>.json`). Run `claude-fleet-install --dry-run` to preview.
 - After you approve a permission prompt, the LED stays 🟡 until the turn ends (🟢). Enabling
   a `PreToolUse`/`PostToolUse` "back to red" hook is a documented opt-in (adds a hook fire per
   tool call) — not on by default to keep sessions snappy.
-- Session name = the working-directory folder name. Override per session with the
-  `CLAUDE_FLEET_NAME` env var.
+- Session name = Claude Code's auto-generated session title (falls back to the first prompt,
+  then the folder name). Override per session with the `CLAUDE_FLEET_NAME` env var; override
+  the machine label with `CLAUDE_FLEET_HOST`.
+- Hooks never touch the network — all sync happens in the widget/agent, so hook latency stays zero.
 - Tkinter (Windows-first). A polished PySide6 version is planned.

@@ -13,7 +13,8 @@ import tempfile
 import time
 from pathlib import Path
 
-STATE_DIR = Path.home() / ".claude" / "fleet"
+STATE_DIR = Path(os.environ.get("CLAUDE_FLEET_DIR") or (Path.home() / ".claude" / "fleet"))
+REMOTE_DIR = STATE_DIR / "remote"   # sessions mirrored from other machines
 _CONFIG = STATE_DIR / "_widget.json"
 
 # --- status vocabulary --------------------------------------------------------
@@ -88,6 +89,26 @@ def read_all_sessions() -> list[dict]:
             continue  # keep last-good; a writer may be mid-write
         if isinstance(d, dict) and "status" in d:
             d.setdefault("session_id", p.stem)
+            out.append(d)
+    return out
+
+
+def read_remote_sessions() -> list[dict]:
+    """Sessions from other machines, mirrored into REMOTE_DIR by the sync agent.
+
+    Plain JSON read (already decrypted by the agent) — no crypto needed here, so
+    the widget can display remote rows without importing ``cryptography``.
+    """
+    if not REMOTE_DIR.exists():
+        return []
+    out = []
+    for p in REMOTE_DIR.glob("*.json"):
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                d = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+        if isinstance(d, dict) and "status" in d:
             out.append(d)
     return out
 

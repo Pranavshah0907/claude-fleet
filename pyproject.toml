@@ -1,13 +1,15 @@
 [project]
 name = "claude-fleet"
-version = "0.1.1"
-description = "Always-on-top widget showing a live LED status for every Claude Code session."
+version = "0.2.0"
+description = "Always-on-top widget showing a live LED status for every Claude Code session, across machines."
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = []  # Tkinter ships with CPython; zero third-party deps.
+dependencies = [
+    "cryptography>=42",  # Fernet E2E encryption for cross-machine sync
+]
 
 [project.scripts]
-claude-fleet = "claude_fleet.widget:main"
+claude-fleet = "claude_fleet.cli:main"
 claude-fleet-hook = "claude_fleet.hook:main"
 claude-fleet-install = "claude_fleet.install:main"
 
