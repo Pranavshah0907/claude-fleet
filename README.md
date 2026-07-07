@@ -14,7 +14,8 @@ A tiny always-on-top desktop widget that shows a live **LED per Claude Code sess
 - ⚪ **gray** — idle, or gone stale (no update in 30 min)
 
 Each row also shows a dim "time since last activity" (e.g. `5m`, `2h`) and, for sessions
-on other machines, the origin machine's name.
+on other machines, the origin machine's name. Click the faint **✕** on a row to dismiss it;
+it reappears automatically the next time that session does something (e.g. you send a prompt).
 
 Every Claude Code session on the machine registers **automatically** — no per-project
 setup — because the reporting is wired into your *global* Claude Code hooks.

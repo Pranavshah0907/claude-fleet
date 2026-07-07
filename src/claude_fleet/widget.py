@@ -24,6 +24,8 @@ DIM = "#8a8a8a"
 ACCENT = "#4c8bf5"
 HOST_FG = "#6b7bb0"        # dim blue tag for sessions on other machines
 AGE_FG = "#707070"        # dim gray "time since last activity"
+DISMISS_FG = "#4a4a4a"     # faint ✕ (dismiss row)
+DISMISS_HOVER = "#ff6b6b"  # brightens red on hover
 ROW_H = 26
 HEADER_H = 24
 WIDTH = 320
@@ -65,6 +67,7 @@ class FleetWidget:
         self.empty_label: tk.Label | None = None
         self._drag = {"x": 0, "y": 0}
         self._name_cache: dict = {}           # transcript_path -> (ts, name)
+        self._dismissed: dict = {}            # key -> updated_at when dismissed
 
         self._restore_position()
         self._start_sync()
@@ -105,9 +108,14 @@ class FleetWidget:
         fr = tk.Frame(self.body, bg=BG, height=ROW_H)
         fr.pack(fill="x")
         fr.pack_propagate(False)
-        canvas = tk.Canvas(fr, width=18, height=ROW_H, bg=BG, highlightthickness=0)
-        canvas.pack(side="right", padx=(4, 10))
-        cx, cy = 9, ROW_H // 2
+        dismiss = tk.Label(fr, text="✕", fg=DISMISS_FG, bg=BG,
+                           font=("Segoe UI", 8), cursor="hand2")
+        dismiss.pack(side="right", padx=(0, 6))
+        dismiss.bind("<Enter>", lambda e: dismiss.config(fg=DISMISS_HOVER))
+        dismiss.bind("<Leave>", lambda e: dismiss.config(fg=DISMISS_FG))
+        canvas = tk.Canvas(fr, width=16, height=ROW_H, bg=BG, highlightthickness=0)
+        canvas.pack(side="right", padx=(2, 2))
+        cx, cy = 8, ROW_H // 2
         oval = canvas.create_oval(cx - LED_R, cy - LED_R, cx + LED_R, cy + LED_R,
                                   fill=common.COLORS[common.IDLE], outline="")
         host_lbl = tk.Label(fr, text="", fg=HOST_FG, bg=BG, font=("Segoe UI", 7))
@@ -116,8 +124,8 @@ class FleetWidget:
         age_lbl.pack(side="right", padx=(0, 4))
         name_lbl = tk.Label(fr, text="", fg=FG, bg=BG, font=("Segoe UI", 9), anchor="w")
         name_lbl.pack(side="left", fill="x", expand=True, padx=(12, 0))
-        return {"frame": fr, "canvas": canvas, "oval": oval,
-                "name": name_lbl, "host": host_lbl, "age": age_lbl}
+        return {"frame": fr, "canvas": canvas, "oval": oval, "name": name_lbl,
+                "host": host_lbl, "age": age_lbl, "dismiss": dismiss}
 
     # --- refresh loop ---------------------------------------------------------
     def refresh(self) -> None:
@@ -132,29 +140,46 @@ class FleetWidget:
         for s in visible:
             host = s.get("host") or ""       # remote sessions carry their machine
             key = f"{host}/{s.get('session_id')}"
+            updated = s.get("updated_at", now)
+            dm = self._dismissed.get(key)
+            if dm is not None:
+                if updated > dm:
+                    del self._dismissed[key]  # new activity -> bring it back
+                else:
+                    continue                  # dismissed and quiet -> stay hidden
             seen.add(key)
             status = s.get("status", common.IDLE)
-            stale = (now - s.get("updated_at", 0)) > STALE_SECS
+            stale = (now - updated) > STALE_SECS
             color = common.STALE_COLOR if stale else common.COLORS.get(
                 status, common.COLORS[common.IDLE])
             if key not in self.rows:
                 self.rows[key] = self._make_row()
+                self.rows[key]["dismiss"].bind("<Button-1>", lambda e, k=key: self._dismiss(k))
             row = self.rows[key]
+            row["updated_at"] = updated
             name = str(s.get("name", "?"))
             if not host and s.get("transcript_path"):  # local: re-resolve title live
                 name = self._local_name(s["transcript_path"], s.get("cwd"), name, now)
             row["name"].config(text=self._truncate(name, NAME_CHARS))
             row["host"].config(text=host)
-            row["age"].config(text=_ago(now - s.get("updated_at", now)))
+            row["age"].config(text=_ago(now - updated))
             row["canvas"].itemconfig(row["oval"], fill=color)
 
         for key in list(self.rows):
             if key not in seen:
                 self.rows.pop(key)["frame"].destroy()
 
-        self._update_empty(len(visible) == 0)
-        self._resize(len(visible))
+        self._update_empty(len(self.rows) == 0)
+        self._resize(len(self.rows))
         self.root.after(POLL_MS, self.refresh)
+
+    def _dismiss(self, key: str) -> None:
+        """Hide a row until the session shows new activity (updated_at advances)."""
+        row = self.rows.get(key)
+        self._dismissed[key] = row.get("updated_at", 0) if row else 0
+        if row:
+            row["frame"].destroy()
+            self.rows.pop(key, None)
 
     def _update_empty(self, is_empty: bool) -> None:
         if is_empty and self.empty_label is None:
