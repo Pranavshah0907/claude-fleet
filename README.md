@@ -33,9 +33,14 @@ watches the folder. Concurrent sessions just work (one file each).
 |---|---|---|
 | `SessionStart` | idle | ⚪ |
 | `UserPromptSubmit` | working | 🔴 |
-| `Notification` | waiting | 🟡 |
+| `Notification` (permission) | waiting | 🟡 |
+| `PreToolUse` `AskUserQuestion`/`ExitPlanMode` | waiting | 🟡 |
+| `PostToolUse` `AskUserQuestion`/`ExitPlanMode` | working | 🔴 |
 | `Stop` | done | 🟢 |
 | `SessionEnd` | (file removed) | — |
+
+The session name is re-resolved **live** from the transcript by the widget/agent, so
+the auto-title appears within seconds of Claude generating it (not frozen at hook time).
 
 ## Install
 

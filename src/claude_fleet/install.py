@@ -1,6 +1,6 @@
 """Wire the fleet hooks into the user's global Claude Code settings.
 
-Adds five hook events to ~/.claude/settings.json so EVERY session on this machine
+Adds hooks to ~/.claude/settings.json so EVERY session on this machine
 auto-registers with the widget. Idempotent (re-running replaces our entries) and
 non-destructive (backs up the file and preserves any other hooks you have).
 
@@ -19,14 +19,19 @@ from pathlib import Path
 
 SETTINGS = Path.home() / ".claude" / "settings.json"
 
-# hook event -> status arg passed to claude-fleet-hook
-EVENTS = {
-    "UserPromptSubmit": "working",  # turn starts  -> red
-    "Notification": "waiting",      # needs you    -> amber
-    "Stop": "done",                 # turn done    -> green
-    "SessionStart": "idle",         # appears in list immediately -> gray
-    "SessionEnd": "end",            # remove from list
-}
+# (event, matcher, status). matcher "" = all; for Pre/PostToolUse it's a tool-name
+# pattern. The AskUserQuestion/ExitPlanMode hooks make the LED go amber while Claude
+# waits on a question/plan approval (mid-turn, so Notification doesn't fire), then
+# back to red once answered. They only fire on those rare tools -> no per-tool cost.
+HOOKS = [
+    ("UserPromptSubmit", "", "working"),                    # turn starts   -> red
+    ("Notification", "", "waiting"),                        # permission    -> amber
+    ("PreToolUse", "AskUserQuestion|ExitPlanMode", "waiting"),   # asks you  -> amber
+    ("PostToolUse", "AskUserQuestion|ExitPlanMode", "working"),  # answered  -> red
+    ("Stop", "", "done"),                                   # turn done     -> green
+    ("SessionStart", "", "idle"),                           # appears now   -> gray
+    ("SessionEnd", "", "end"),                              # remove from list
+]
 
 
 def _q(path: str) -> str:
@@ -95,9 +100,9 @@ def main() -> None:
     else:
         base = _base_command()
         _strip_fleet(hooks)  # clear any prior fleet entries first
-        for event, status in EVENTS.items():
+        for event, matcher, status in HOOKS:
             hooks.setdefault(event, []).append({
-                "matcher": "",
+                "matcher": matcher,
                 "hooks": [{"type": "command", "command": f"{base} {status}"}],
             })
         action = f"Installed fleet hooks (using: {base} <status>)"

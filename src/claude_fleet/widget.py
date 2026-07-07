@@ -64,6 +64,7 @@ class FleetWidget:
         self.rows: dict[str, dict] = {}       # session_id -> widgets
         self.empty_label: tk.Label | None = None
         self._drag = {"x": 0, "y": 0}
+        self._name_cache: dict = {}           # transcript_path -> (ts, name)
 
         self._restore_position()
         self._start_sync()
@@ -139,7 +140,10 @@ class FleetWidget:
             if key not in self.rows:
                 self.rows[key] = self._make_row()
             row = self.rows[key]
-            row["name"].config(text=self._truncate(str(s.get("name", "?")), NAME_CHARS))
+            name = str(s.get("name", "?"))
+            if not host and s.get("transcript_path"):  # local: re-resolve title live
+                name = self._local_name(s["transcript_path"], s.get("cwd"), name, now)
+            row["name"].config(text=self._truncate(name, NAME_CHARS))
             row["host"].config(text=host)
             row["age"].config(text=_ago(now - s.get("updated_at", now)))
             row["canvas"].itemconfig(row["oval"], fill=color)
@@ -164,6 +168,17 @@ class FleetWidget:
     def _resize(self, n: int) -> None:
         rows_h = n * ROW_H if n else 40
         self.root.geometry(f"{WIDTH}x{HEADER_H + rows_h + 6}")
+
+    def _local_name(self, tp: str, cwd, fallback: str, now: float) -> str:
+        cached = self._name_cache.get(tp)
+        if cached and now - cached[0] < 3.0:   # throttle transcript re-parsing
+            return cached[1]
+        try:
+            name = common.resolve_name(tp, cwd) or fallback
+        except Exception:
+            name = fallback
+        self._name_cache[tp] = (now, name)
+        return name
 
     @staticmethod
     def _truncate(s: str, n: int) -> str:

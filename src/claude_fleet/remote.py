@@ -196,6 +196,11 @@ def push_local(cfg: dict) -> None:
             continue
         rec = dict(s)
         rec["host"] = host
+        # Re-resolve the name live so remote viewers get the ai-title as soon as
+        # Claude writes it, instead of the folder-name fallback frozen at hook time.
+        tp = rec.get("transcript_path")
+        if tp:
+            rec["name"] = common.resolve_name(tp, rec.get("cwd"))
         current[prefix + _key_hash(pw, host, sid)] = rec
     for key, rec in current.items():
         _redis(cfg, "SET", key, encrypt(pw, room, rec), "EX", SESSION_TTL)

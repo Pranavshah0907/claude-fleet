@@ -41,59 +41,6 @@ def _read_payload() -> dict:
         return {}
 
 
-def _snippet(text: str, n: int = 50) -> str:
-    s = " ".join(str(text).split()).strip()
-    return (s[:n].rstrip() + "…") if len(s) > n else s
-
-
-def _title_from_transcript(path: str | None) -> str | None:
-    """Claude Code's own session name.
-
-    Prefer the auto-generated title (``{"type":"ai-title","aiTitle": ...}``); if
-    it hasn't been generated yet, fall back to the first user prompt. One cheap
-    pass, JSON-parsing only the few candidate lines.
-    """
-    if not path or not os.path.exists(path):
-        return None
-    title = None
-    prompt = None
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            for line in f:
-                if '"ai-title"' in line:
-                    try:
-                        obj = json.loads(line)
-                    except Exception:
-                        continue
-                    if obj.get("type") == "ai-title" and obj.get("aiTitle"):
-                        title = obj["aiTitle"]  # last one wins (title can update)
-                elif '"lastPrompt"' in line and prompt is None:
-                    try:
-                        obj = json.loads(line)
-                    except Exception:
-                        continue
-                    if obj.get("lastPrompt"):
-                        prompt = obj["lastPrompt"]
-    except OSError:
-        return None
-    if title:
-        return title.strip()
-    if prompt:
-        return _snippet(prompt)
-    return None
-
-
-def _session_name(payload: dict, cwd: str) -> str:
-    override = os.environ.get("CLAUDE_FLEET_NAME")
-    if override:
-        return override
-    title = _title_from_transcript(payload.get("transcript_path"))
-    if title:
-        return title
-    base = os.path.basename(cwd.rstrip("/\\"))
-    return base or cwd or "session"
-
-
 def _run() -> None:
     arg = sys.argv[1] if len(sys.argv) > 1 else "idle"
     status = STATUS_MAP.get(arg, common.IDLE)
@@ -105,12 +52,15 @@ def _run() -> None:
         or "unknown"
     )
     cwd = payload.get("cwd") or os.getcwd()
-    name = _session_name(payload, cwd)
+    transcript_path = payload.get("transcript_path")
+    # Best name we can get right now; the widget/agent re-resolve it live so the
+    # ai-title is picked up as soon as Claude generates it (even mid-turn).
+    name = common.resolve_name(transcript_path, cwd)
 
     if status == "end":
         common.remove_session(session_id)
     else:
-        common.write_session(session_id, name, status, cwd)
+        common.write_session(session_id, name, status, cwd, transcript_path)
 
 
 def main() -> None:
