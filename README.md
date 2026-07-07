@@ -11,11 +11,12 @@ A tiny always-on-top desktop widget that shows a live **LED per Claude Code sess
 - 🔴 **red** — Claude is actively working
 - 🟡 **amber** — blocked, waiting for your input (permission / attention)
 - 🟢 **green** — turn finished, control handed back to you
-- ⚪ **gray** — idle, or gone stale (no update in 30 min)
+- ⚪ **gray** — finished but idle for 30 min (a *running* turn never grays, however long)
 
-Each row also shows a dim "time since last activity" (e.g. `5m`, `2h`) and, for sessions
-on other machines, the origin machine's name. Click the faint **✕** on a row to dismiss it;
-it reappears automatically the next time that session does something (e.g. you send a prompt).
+Settled rows show a dim idle time — how long since the turn ended (e.g. `5m`, `2h`); a
+running turn shows no timer. Sessions on other machines carry the origin machine's name.
+Click the faint **✕** on a row to dismiss it; it reappears the next time that session does
+something (e.g. you send a prompt).
 
 Every Claude Code session on the machine registers **automatically** — no per-project
 setup — because the reporting is wired into your *global* Claude Code hooks.

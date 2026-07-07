@@ -14,8 +14,8 @@ import tkinter as tk
 from . import common, remote
 
 POLL_MS = 500
-STALE_SECS = 30 * 60      # keep the status color this long; then dim to gray
-HIDE_SECS = 4 * 3600      # drop from the list entirely (e.g. terminal killed)
+STALE_SECS = 30 * 60      # gray a SETTLED session after this long idle (never while working)
+HIDE_SECS = 4 * 3600      # drop a settled session entirely (working sessions never auto-hide)
 
 BG = "#1b1b1d"
 HEADER_BG = "#111113"
@@ -131,7 +131,11 @@ class FleetWidget:
     def refresh(self) -> None:
         now = time.time()
         sessions = common.read_all_sessions() + common.read_remote_sessions()
-        visible = [s for s in sessions if now - s.get("updated_at", 0) < HIDE_SECS]
+        # keep working sessions no matter how long the turn runs (e.g. overnight);
+        # only settled sessions are auto-hidden after HIDE_SECS
+        visible = [s for s in sessions
+                   if s.get("status") == common.WORKING
+                   or now - s.get("updated_at", 0) < HIDE_SECS]
         visible.sort(key=lambda s: (PRIORITY.get(s.get("status"), 9),
                                     str(s.get("host") or ""),
                                     str(s.get("name", "")).lower()))
@@ -149,7 +153,11 @@ class FleetWidget:
                     continue                  # dismissed and quiet -> stay hidden
             seen.add(key)
             status = s.get("status", common.IDLE)
-            stale = (now - updated) > STALE_SECS
+            # A running turn fires no hooks until it ends, so its updated_at is the
+            # turn START. Don't treat that as idle: never gray a working session,
+            # and only count "time since" once the turn is over.
+            active = status == common.WORKING
+            stale = (not active) and (now - updated) > STALE_SECS
             color = common.STALE_COLOR if stale else common.COLORS.get(
                 status, common.COLORS[common.IDLE])
             if key not in self.rows:
@@ -162,7 +170,7 @@ class FleetWidget:
                 name = self._local_name(s["transcript_path"], s.get("cwd"), name, now)
             row["name"].config(text=self._truncate(name, NAME_CHARS))
             row["host"].config(text=host)
-            row["age"].config(text=_ago(now - updated))
+            row["age"].config(text="" if active else _ago(now - updated))
             row["canvas"].itemconfig(row["oval"], fill=color)
 
         for key in list(self.rows):
