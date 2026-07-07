@@ -14,7 +14,7 @@ import tkinter as tk
 from . import common, remote
 
 POLL_MS = 500
-STALE_SECS = 15 * 60      # dim to gray after this with no update
+STALE_SECS = 30 * 60      # keep the status color this long; then dim to gray
 HIDE_SECS = 4 * 3600      # drop from the list entirely (e.g. terminal killed)
 
 BG = "#1b1b1d"
@@ -23,11 +23,24 @@ FG = "#e6e6e6"
 DIM = "#8a8a8a"
 ACCENT = "#4c8bf5"
 HOST_FG = "#6b7bb0"        # dim blue tag for sessions on other machines
+AGE_FG = "#707070"        # dim gray "time since last activity"
 ROW_H = 26
 HEADER_H = 24
-WIDTH = 300
-NAME_CHARS = 34
+WIDTH = 320
+NAME_CHARS = 30
 LED_R = 6
+
+
+def _ago(secs: float) -> str:
+    """Compact 'time since last activity': now / 5m / 2h / 3d."""
+    s = int(secs)
+    if s < 60:
+        return "now"
+    if s < 3600:
+        return f"{s // 60}m"
+    if s < 86400:
+        return f"{s // 3600}h"
+    return f"{s // 86400}d"
 
 # needs-you first, then running, then done, then idle
 PRIORITY = {common.WAITING: 0, common.WORKING: 1, common.DONE: 2, common.IDLE: 3}
@@ -98,9 +111,12 @@ class FleetWidget:
                                   fill=common.COLORS[common.IDLE], outline="")
         host_lbl = tk.Label(fr, text="", fg=HOST_FG, bg=BG, font=("Segoe UI", 7))
         host_lbl.pack(side="right", padx=(0, 2))
+        age_lbl = tk.Label(fr, text="", fg=AGE_FG, bg=BG, font=("Segoe UI", 7))
+        age_lbl.pack(side="right", padx=(0, 4))
         name_lbl = tk.Label(fr, text="", fg=FG, bg=BG, font=("Segoe UI", 9), anchor="w")
         name_lbl.pack(side="left", fill="x", expand=True, padx=(12, 0))
-        return {"frame": fr, "canvas": canvas, "oval": oval, "name": name_lbl, "host": host_lbl}
+        return {"frame": fr, "canvas": canvas, "oval": oval,
+                "name": name_lbl, "host": host_lbl, "age": age_lbl}
 
     # --- refresh loop ---------------------------------------------------------
     def refresh(self) -> None:
@@ -125,6 +141,7 @@ class FleetWidget:
             row = self.rows[key]
             row["name"].config(text=self._truncate(str(s.get("name", "?")), NAME_CHARS))
             row["host"].config(text=host)
+            row["age"].config(text=_ago(now - s.get("updated_at", now)))
             row["canvas"].itemconfig(row["oval"], fill=color)
 
         for key in list(self.rows):

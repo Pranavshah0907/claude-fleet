@@ -11,7 +11,10 @@ A tiny always-on-top desktop widget that shows a live **LED per Claude Code sess
 - 🔴 **red** — Claude is actively working
 - 🟡 **amber** — blocked, waiting for your input (permission / attention)
 - 🟢 **green** — turn finished, control handed back to you
-- ⚪ **gray** — idle, or gone stale (no update in 15 min)
+- ⚪ **gray** — idle, or gone stale (no update in 30 min)
+
+Each row also shows a dim "time since last activity" (e.g. `5m`, `2h`) and, for sessions
+on other machines, the origin machine's name.
 
 Every Claude Code session on the machine registers **automatically** — no per-project
 setup — because the reporting is wired into your *global* Claude Code hooks.
