@@ -73,12 +73,18 @@ plain HTTPS (firewall-friendly). Sessions auto-expire via TTL, so dead ones vani
    (Upstash console → your DB → "REST API").
 2. Create the room and link this machine:
    ```bash
-   claude-fleet init-room            # prompts for the URL + token; prints ID + PASS
+   claude-fleet init-room            # prompts for URL + token; prints a short ID + PASS
    ```
-3. On **every other laptop** (after `uv tool install` + `claude-fleet-install`):
-   ```bash
-   claude-fleet link --code <ID> --pass <PASS>
-   ```
+
+**On every other laptop** (after `uv tool install` + `claude-fleet-install`), save the
+relay creds once, then join with the short room ID:
+```bash
+claude-fleet set-relay --url <URL> --token <TOKEN>
+claude-fleet join --room <ID> --pass <PASS>       # ID is the short 8-char room code
+```
+The relay creds (long token) are entered once per machine; the **ID you share is just the
+short room code**. Prefer a single self-contained string? `claude-fleet link --code <CODE> --pass <PASS>`
+still works (the code embeds the relay creds, so it's long).
 
 **Then, on each machine that should participate**, run one of:
 - `claude-fleet` — the widget (also syncs in a background thread), or

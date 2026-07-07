@@ -53,14 +53,42 @@ def cmd_init_room(args) -> None:
     remote.save_remote_cfg(cfg)
     code = remote.make_pairing_code(cfg["url"], token, room)
     print("\n=== Room created — this machine is linked ===")
-    print("Give these to your other laptops:\n")
-    print(f"  ID   (pairing code) : {code}")
-    print(f"  PASS (passphrase)   : {passphrase}\n")
-    print("On each other laptop:")
+    print("Short ID to share with your other laptops:\n")
+    print(f"  ID (room) : {room}")
+    print(f"  PASS      : {passphrase}\n")
+    print("On another laptop — one-time relay setup, then join with the short ID:")
+    print(f"  claude-fleet set-relay --url {cfg['url']} --token {token}")
+    print(f"  claude-fleet join --room {room} --pass {passphrase}\n")
+    print("Or, one self-contained code (no separate relay step):")
     print(f"  claude-fleet link --code {code} --pass {passphrase}")
     print("\nThen run  claude-fleet  (widget) or  claude-fleet agent  (headless) on every machine.")
     if not ok:
         print(f"\n(note: relay was unreachable during setup: {msg})")
+
+
+def cmd_set_relay(args) -> None:
+    from . import remote
+    url = args.url or input("Upstash Redis REST URL: ").strip()
+    token = args.token or getpass.getpass("Upstash Redis REST TOKEN: ").strip()
+    remote.update_cfg(url=url.rstrip("/"), token=token)
+    print("Relay credentials saved. Now join a room:  claude-fleet join")
+
+
+def cmd_join(args) -> None:
+    from . import remote
+    cfg = remote._load_raw()
+    if not (cfg.get("url") and cfg.get("token")):
+        print("No relay configured on this machine.")
+        print("Run  claude-fleet set-relay --url <URL> --token <TOKEN>  first,")
+        print("or use the self-contained  claude-fleet link --code <CODE> --pass <PASS>.")
+        return
+    room = args.room or input("Room ID: ").strip()
+    passphrase = args.passphrase or getpass.getpass("Passphrase (PASS): ").strip()
+    cfg = remote.update_cfg(room=room, passphrase=passphrase)
+    ok, msg = remote.ping(cfg)
+    print(f"Joined room '{room}' as '{remote.local_host()}'."
+          + ("" if ok else f"  (warning: relay unreachable: {msg})"))
+    print("Run  claude-fleet  (widget) or  claude-fleet agent  (headless) to start syncing.")
 
 
 def cmd_link(args) -> None:
@@ -115,10 +143,19 @@ def main() -> None:
     p.add_argument("--pass", dest="passphrase"); p.add_argument("--force", action="store_true")
     p.set_defaults(func=cmd_init_room)
 
-    p = sub.add_parser("link", help="link this machine to an existing room")
+    p = sub.add_parser("link", help="link via a self-contained pairing code")
     p.add_argument("--code"); p.add_argument("--pass", dest="passphrase")
     p.add_argument("--force", action="store_true")
     p.set_defaults(func=cmd_link)
+
+    p = sub.add_parser("set-relay", help="save Upstash relay creds (url + token)")
+    p.add_argument("--url"); p.add_argument("--token")
+    p.set_defaults(func=cmd_set_relay)
+
+    p = sub.add_parser("join", help="join a room by short ID (needs relay creds set)")
+    p.add_argument("--room"); p.add_argument("--pass", dest="passphrase")
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(func=cmd_join)
 
     sub.add_parser("unlink", help="remove remote config").set_defaults(func=cmd_unlink)
     sub.add_parser("status", help="show remote config + connectivity").set_defaults(func=cmd_status)

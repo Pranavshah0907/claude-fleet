@@ -81,6 +81,27 @@ def clear_remote_cfg() -> None:
         pass
 
 
+def _load_raw() -> dict:
+    """Raw config (no env override, no 'configured' filter) for merging."""
+    try:
+        with open(REMOTE_CFG, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def update_cfg(**kv) -> dict:
+    """Merge non-None keys into the saved config. Lets `set-relay` (url+token)
+    and `join` (room+passphrase) be set independently, so the shared ID can be
+    just the short room code."""
+    cfg = _load_raw()
+    for k, v in kv.items():
+        if v is not None:
+            cfg[k] = v
+    save_remote_cfg(cfg)
+    return cfg
+
+
 # --- pairing code (the "ID") --------------------------------------------------
 def make_pairing_code(url: str, token: str, room: str) -> str:
     blob = json.dumps({"u": url, "t": token, "r": room}, separators=(",", ":"))
