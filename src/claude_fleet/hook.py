@@ -41,10 +41,55 @@ def _read_payload() -> dict:
         return {}
 
 
-def _session_name(cwd: str) -> str:
+def _snippet(text: str, n: int = 50) -> str:
+    s = " ".join(str(text).split()).strip()
+    return (s[:n].rstrip() + "…") if len(s) > n else s
+
+
+def _title_from_transcript(path: str | None) -> str | None:
+    """Claude Code's own session name.
+
+    Prefer the auto-generated title (``{"type":"ai-title","aiTitle": ...}``); if
+    it hasn't been generated yet, fall back to the first user prompt. One cheap
+    pass, JSON-parsing only the few candidate lines.
+    """
+    if not path or not os.path.exists(path):
+        return None
+    title = None
+    prompt = None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                if '"ai-title"' in line:
+                    try:
+                        obj = json.loads(line)
+                    except Exception:
+                        continue
+                    if obj.get("type") == "ai-title" and obj.get("aiTitle"):
+                        title = obj["aiTitle"]  # last one wins (title can update)
+                elif '"lastPrompt"' in line and prompt is None:
+                    try:
+                        obj = json.loads(line)
+                    except Exception:
+                        continue
+                    if obj.get("lastPrompt"):
+                        prompt = obj["lastPrompt"]
+    except OSError:
+        return None
+    if title:
+        return title.strip()
+    if prompt:
+        return _snippet(prompt)
+    return None
+
+
+def _session_name(payload: dict, cwd: str) -> str:
     override = os.environ.get("CLAUDE_FLEET_NAME")
     if override:
         return override
+    title = _title_from_transcript(payload.get("transcript_path"))
+    if title:
+        return title
     base = os.path.basename(cwd.rstrip("/\\"))
     return base or cwd or "session"
 
@@ -60,7 +105,7 @@ def _run() -> None:
         or "unknown"
     )
     cwd = payload.get("cwd") or os.getcwd()
-    name = _session_name(cwd)
+    name = _session_name(payload, cwd)
 
     if status == "end":
         common.remove_session(session_id)

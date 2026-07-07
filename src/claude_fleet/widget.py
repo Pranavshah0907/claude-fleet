@@ -23,7 +23,8 @@ DIM = "#8a8a8a"
 ACCENT = "#4c8bf5"
 ROW_H = 26
 HEADER_H = 24
-WIDTH = 250
+WIDTH = 300
+NAME_CHARS = 34
 LED_R = 6
 
 # needs-you first, then running, then done, then idle
@@ -104,7 +105,7 @@ class FleetWidget:
             if sid not in self.rows:
                 self.rows[sid] = self._make_row()
             row = self.rows[sid]
-            row["name"].config(text=self._truncate(str(s.get("name", "?")), 26))
+            row["name"].config(text=self._truncate(str(s.get("name", "?")), NAME_CHARS))
             row["canvas"].itemconfig(row["oval"], fill=color)
 
         for sid in list(self.rows):
