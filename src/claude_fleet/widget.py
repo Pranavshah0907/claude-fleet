@@ -131,10 +131,10 @@ class FleetWidget:
     def refresh(self) -> None:
         now = time.time()
         sessions = common.read_all_sessions() + common.read_remote_sessions()
-        # keep working sessions no matter how long the turn runs (e.g. overnight);
-        # only settled sessions are auto-hidden after HIDE_SECS
+        # keep actively-working sessions no matter how long the turn runs (e.g.
+        # overnight); only settled sessions are auto-hidden after HIDE_SECS
         visible = [s for s in sessions
-                   if s.get("status") == common.WORKING
+                   if self._is_active(s)
                    or now - s.get("updated_at", 0) < HIDE_SECS]
         visible.sort(key=lambda s: (PRIORITY.get(s.get("status"), 9),
                                     str(s.get("host") or ""),
@@ -153,13 +153,17 @@ class FleetWidget:
                     continue                  # dismissed and quiet -> stay hidden
             seen.add(key)
             status = s.get("status", common.IDLE)
-            # A running turn fires no hooks until it ends, so its updated_at is the
-            # turn START. Don't treat that as idle: never gray a working session,
-            # and only count "time since" once the turn is over.
-            active = status == common.WORKING
+            # "active" = hook says working OR the transcript is still being written.
+            # An active session never grays and shows no idle timer; the "time since"
+            # clock only runs once the session has actually settled.
+            active = self._is_active(s)
             stale = (not active) and (now - updated) > STALE_SECS
-            color = common.STALE_COLOR if stale else common.COLORS.get(
-                status, common.COLORS[common.IDLE])
+            if active:
+                color = common.COLORS[common.WORKING]
+            elif stale:
+                color = common.STALE_COLOR
+            else:
+                color = common.COLORS.get(status, common.COLORS[common.IDLE])
             if key not in self.rows:
                 self.rows[key] = self._make_row()
                 self.rows[key]["dismiss"].bind("<Button-1>", lambda e, k=key: self._dismiss(k))
@@ -180,6 +184,15 @@ class FleetWidget:
         self._update_empty(len(self.rows) == 0)
         self._resize(len(self.rows))
         self.root.after(POLL_MS, self.refresh)
+
+    def _is_active(self, s: dict) -> bool:
+        """Working per the hook, or (for local sessions) transcript still growing.
+        Remote sessions are trusted as pushed — the origin agent marks them active."""
+        if s.get("status") == common.WORKING:
+            return True
+        if not (s.get("host") or ""):
+            return common.recently_active(s.get("transcript_path"))
+        return False
 
     def _dismiss(self, key: str) -> None:
         """Hide a row until the session shows new activity (updated_at advances)."""

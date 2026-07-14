@@ -201,6 +201,8 @@ def push_local(cfg: dict) -> None:
         tp = rec.get("transcript_path")
         if tp:
             rec["name"] = common.resolve_name(tp, rec.get("cwd"))
+            if common.recently_active(tp):   # transcript still growing -> working
+                rec["status"] = common.WORKING
         current[prefix + _key_hash(pw, host, sid)] = rec
     for key, rec in current.items():
         _redis(cfg, "SET", key, encrypt(pw, room, rec), "EX", SESSION_TTL)

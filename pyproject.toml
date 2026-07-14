@@ -1,6 +1,6 @@
 [project]
 name = "claude-fleet"
-version = "0.2.7"
+version = "0.2.8"
 description = "Always-on-top widget showing a live LED status for every Claude Code session, across machines."
 readme = "README.md"
 requires-python = ">=3.9"

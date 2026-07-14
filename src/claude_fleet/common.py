@@ -33,6 +33,10 @@ COLORS = {
 }
 STALE_COLOR = "#4a4a4a"  # dimmed: no update in a while, no clean SessionEnd
 
+# A transcript written within this window => the session is actively producing
+# output right now, even if no start/stop hook fired (long or autonomous turns).
+ACTIVE_SECS = 120
+
 
 def ensure_dir() -> Path:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -146,6 +150,17 @@ def resolve_name(transcript_path: str | None, cwd: str | None) -> str:
         return title
     base = os.path.basename((cwd or "").rstrip("/\\"))
     return base or (cwd or "session")
+
+
+def recently_active(transcript_path: str | None) -> bool:
+    """True if the transcript changed within ACTIVE_SECS — the session is working
+    right now even if the coarse start/stop hooks haven't fired (long/autonomous turns)."""
+    if not transcript_path:
+        return False
+    try:
+        return (time.time() - os.path.getmtime(transcript_path)) < ACTIVE_SECS
+    except OSError:
+        return False
 
 
 def read_remote_sessions() -> list[dict]:

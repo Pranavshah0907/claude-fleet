@@ -11,7 +11,9 @@ A tiny always-on-top desktop widget that shows a live **LED per Claude Code sess
 - 🔴 **red** — Claude is actively working
 - 🟡 **amber** — blocked, waiting for your input (permission / attention)
 - 🟢 **green** — turn finished, control handed back to you
-- ⚪ **gray** — finished but idle for 30 min (a *running* turn never grays, however long)
+- ⚪ **gray** — finished/idle for 30 min. A session that's actively working — including a
+  long or **autonomous** turn that fires no hooks (detected by live transcript activity) —
+  stays red and never grays.
 
 Settled rows show a dim idle time — how long since the turn ended (e.g. `5m`, `2h`); a
 running turn shows no timer. Sessions on other machines carry the origin machine's name.
