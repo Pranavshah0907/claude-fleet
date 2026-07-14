@@ -22,6 +22,81 @@ def cmd_widget(_args) -> None:
     widget.main()
 
 
+def _read_pid():
+    from . import common
+    try:
+        return int(common.PID_FILE.read_text(encoding="utf-8").strip())
+    except Exception:
+        return None
+
+
+def _alive(pid: int) -> bool:
+    if os.name == "nt":
+        import subprocess
+        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}"],
+                             capture_output=True, text=True).stdout
+        return str(pid) in out
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _kill(pid: int) -> bool:
+    try:
+        if os.name == "nt":
+            import subprocess
+            # /T kills the whole tree (the venv launcher + its base-python child)
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True)
+        else:
+            import signal
+            os.kill(pid, signal.SIGTERM)
+        return True
+    except Exception:
+        return False
+
+
+def cmd_start(_args) -> None:
+    """Launch the widget detached — no blocked terminal, no console window."""
+    import subprocess
+    from pathlib import Path
+    from . import common
+    pid = _read_pid()
+    if pid and _alive(pid):
+        print(f"Widget already running (pid {pid}). Run  claude-fleet stop  first, or close its window.")
+        return
+    pyw = Path(sys.executable).with_name("pythonw.exe")   # windowless interpreter
+    py = str(pyw) if pyw.exists() else sys.executable
+    kw = {}
+    if os.name == "nt":
+        kw["creationflags"] = 0x00000008 | 0x08000000  # DETACHED_PROCESS | CREATE_NO_WINDOW
+    else:
+        kw["start_new_session"] = True
+    p = subprocess.Popen([py, "-m", "claude_fleet.cli"], **kw)
+    # Record the PID immediately (deterministic) so stop/dedup work at once.
+    try:
+        common.ensure_dir()
+        common.PID_FILE.write_text(str(p.pid), encoding="utf-8")
+    except OSError:
+        pass
+    print("Claude Fleet widget started.")
+
+
+def cmd_stop(_args) -> None:
+    from . import common
+    pid = _read_pid()
+    if not pid:
+        print("No running widget found.")
+        return
+    ok = _kill(pid)
+    try:
+        common.PID_FILE.unlink()
+    except OSError:
+        pass
+    print(f"Stopped widget (pid {pid})." if ok else f"Could not stop pid {pid}.")
+
+
 def cmd_agent(_args) -> None:
     from . import remote
     cfg = remote.load_remote_cfg()
@@ -136,6 +211,8 @@ def main() -> None:
     parser.add_argument("--selftest", action="store_true", help=argparse.SUPPRESS)
     sub = parser.add_subparsers(dest="cmd")
 
+    sub.add_parser("start", help="launch the widget detached (no console window)").set_defaults(func=cmd_start)
+    sub.add_parser("stop", help="stop the running widget").set_defaults(func=cmd_stop)
     sub.add_parser("agent", help="headless cross-machine sync loop").set_defaults(func=cmd_agent)
 
     p = sub.add_parser("init-room", help="create a cross-machine room (needs Upstash creds)")

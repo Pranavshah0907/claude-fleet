@@ -256,7 +256,10 @@ class FleetWidget:
             m.grab_release()
 
     def run(self) -> None:
-        self.root.mainloop()
+        try:
+            self.root.mainloop()
+        except KeyboardInterrupt:
+            pass  # Ctrl+C in a foreground terminal -> quiet exit, no traceback
 
 
 def main() -> None:

@@ -52,8 +52,11 @@ Requires [uv](https://docs.astral.sh/uv/). Then, on any laptop:
 git clone <this-repo> claude-fleet && cd claude-fleet
 uv tool install .          # puts claude-fleet / claude-fleet-hook / claude-fleet-install on PATH
 claude-fleet-install       # merges hooks into ~/.claude/settings.json (backs it up first)
-claude-fleet               # launch the widget
+claude-fleet start         # launch the widget (detached — no console; `claude-fleet stop` to close)
 ```
+
+`claude-fleet` (no subcommand) also runs the widget, but attached to the terminal — use
+`claude-fleet start` for normal use so it runs in the background.
 
 To try before installing: `uv run claude-fleet` (widget) — but the hooks need a real
 install (`claude-fleet-install`) so sessions can report.

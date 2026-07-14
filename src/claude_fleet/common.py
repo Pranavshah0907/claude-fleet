@@ -16,6 +16,7 @@ from pathlib import Path
 STATE_DIR = Path(os.environ.get("CLAUDE_FLEET_DIR") or (Path.home() / ".claude" / "fleet"))
 REMOTE_DIR = STATE_DIR / "remote"   # sessions mirrored from other machines
 _CONFIG = STATE_DIR / "_widget.json"
+PID_FILE = STATE_DIR / "_widget.pid"   # running widget's PID (for `stop`/dedup)
 
 # --- status vocabulary --------------------------------------------------------
 WORKING = "working"   # Claude is actively running a turn
